@@ -5,30 +5,34 @@ import telebot
 from telebot import types
 from aiogram import Bot, Dispatcher
 from googletrans import Translator, constants
-from pprint import pprint
 import datetime
+import logging
 
+
+logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.DEBUG, filename='logs.log')
 
 bot = telebot.TeleBot('5485448146:AAEbBQrsmJXeftqkjCGSW-zeW5YtaAqwMeE', parse_mode='HTML')
 
 translator = Translator()
 
-#date = str(datetime.date.today())
-
-#d = date.replace('-', '')
-
 
 def get_id(message):
-    user_id = message.from_user.id
-    return user_id
+    """
+    Returns id of user.
+    """
+    return message.from_user.id
 
 
 def create_connection(path):
+    """
+    Create connection to db.
+    """
     connection = None
     try:
         connection = sqlite3.connect(path, check_same_thread=False)
     except Error as e:
-        print(f"The error '{e}' occurred")
+        logging.exception(f"The error '{e}' occurred")
+        raise
     return connection
 
 
@@ -44,7 +48,7 @@ def execute_query(query):
         cursor.execute(query)
         connection.commit()
     except Error as e:
-        print(f"The error '{e}' occurred")
+        logging.exception(f"The error '{e}' occurred")
 
 
 def create_table(message, name):
@@ -59,18 +63,23 @@ def create_table(message, name):
 
 
 def counting(message):
+    """
+    Counts how many times a person launches the program
+    """
     try:
         cursor.execute(f"SELECT id FROM count{get_id(message)}")
         count = cursor.fetchall()
-        count = int(count[-1][-1])
         connection.commit()
-        return count
+        return int(count[-1][-1])
     except Error as e:
         bot.send_message(message.chat.id, f"The error '{e}' occurred")
         start(message)
 
 
 def translate_it(message):
+    """
+    User can write a word or a phrase to translate
+    """
     msg = bot.send_message(message.chat.id, 'Enter English word')
     bot.register_next_step_handler(msg, translate_it2)
 
@@ -104,6 +113,9 @@ def translate_it4(message, eng, rus):
 
 
 def save_translated(message, eng, rus):
+    """
+    Saving a pair of words to user's dictionary
+    """
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     item1 = types.KeyboardButton("Restart")
     item2 = types.KeyboardButton("To main menu")
@@ -121,6 +133,9 @@ def save_translated(message, eng, rus):
 
 
 def show(message):
+    """
+    Show user's dictionary
+    """
     try:
         bot.send_message(message.chat.id, "Here is your dictionary:")
         cursor.execute(f"SELECT english, russian FROM user{get_id(message)}")
@@ -135,6 +150,9 @@ def show(message):
 
 
 def delete(message):
+    """
+    Delete a pair from user's dictionary
+    """
     msg = bot.send_message(message.chat.id, 'What word do you want to delete?')
     bot.register_next_step_handler(msg, delete2)
 
@@ -166,6 +184,9 @@ def repeat_delete(message):
 
 
 def add_eng(message):
+    """
+    Manually adding pairs of words to user's dictionary
+    """
     msg = bot.send_message(message.chat.id, 'Enter new word in English: ')
     key = message.text
     bot.register_next_step_handler(msg, add_rus, key)
@@ -201,18 +222,23 @@ def repeat_add_word(message):
         return start(message)
 
 
-def _10aday(message):
+def ten_a_day(message):
+    """
+    Start learning words of the day
+    It shows a word in English and user must choose this word in their native language from four options
+    """
+    logger.info("User {get_id(message)} has launched 10 a day")
     day_dict = [[x for x in range(2)] for y in range(10)]
     cursor.execute(f"SELECT english, russian FROM user{get_id(message)}")
     result = cursor.fetchall()
-    for i in range(0, 10):
+    for i in range(len(day_dict)):
         temp = result[i]
         eng = str(temp[0])
         rus = str(temp[1])
         day_dict[i][0] = eng
         day_dict[i][1] = rus
         i += 1
-    for i in range(0, 10):
+    for i in range(len(day_dict)):
         delete = f"DELETE FROM user{get_id(message)} WHERE english = '{day_dict[i][0]}'"
         cursor.execute(delete)
         i += 1
@@ -235,7 +261,7 @@ def learn_1st(message, day_dict):
         bot.send_message(message.chat.id, f"The error '{e}' occurred")
         start(message)
     bot.send_message(message.chat.id, "Here is words for training:")
-    for i in range(0, 10):
+    for i in range(len(day_dict)):
         bot.send_message(message.chat.id, f'{day_dict[i][0]} - {day_dict[i][1]}')
     temp = day_dict.copy()
     first_day_dict = []
@@ -246,31 +272,12 @@ def learn_1st(message, day_dict):
     bot.register_next_step_handler(message, learn_1st_1, day_dict, temp, first_day_dict)
 
 def learn_1st_1(message, day_dict, temp, first_day_dict):
-    num = random.randint(0, len(day_dict) - 1)
+    num = random.randint(len(day_dict) - 1)
     word = day_dict[num]
-    rand = random.randint(1, 4)
+    rand = random.randint(3)
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    if rand == 1:
-        item1 = types.KeyboardButton(f'{word[1]}')
-        item2 = types.KeyboardButton(f'{temp[random.randint(0, 9)][1]}')
-        item3 = types.KeyboardButton(f'{temp[random.randint(0, 9)][1]}')
-        item4 = types.KeyboardButton(f'{temp[random.randint(0, 9)][1]}')
-    elif rand == 2:
-        item1 = types.KeyboardButton(f'{temp[random.randint(0, 9)][1]}')
-        item2 = types.KeyboardButton(f'{word[1]}')
-        item3 = types.KeyboardButton(f'{temp[random.randint(0, 9)][1]}')
-        item4 = types.KeyboardButton(f'{temp[random.randint(0, 9)][1]}')
-    elif rand == 3:
-        item1 = types.KeyboardButton(f'{temp[random.randint(0, 9)][1]}')
-        item2 = types.KeyboardButton(f'{temp[random.randint(0, 9)][1]}')
-        item3 = types.KeyboardButton(f'{word[1]}')
-        item4 = types.KeyboardButton(f'{temp[random.randint(0, 9)][1]}')
-    else:
-        item1 = types.KeyboardButton(f'{temp[random.randint(0, 9)][1]}')
-        item2 = types.KeyboardButton(f'{temp[random.randint(0, 9)][1]}')
-        item3 = types.KeyboardButton(f'{temp[random.randint(0, 9)][1]}')
-        item4 = types.KeyboardButton(f'{word[1]}')
-    markup.add(item1, item2, item3, item4)
+    items = [temp[random.randint(9)][1] for i in range(3) in i != rand else word[1]]
+    markup.add(*items)
     bot.send_message(message.chat.id, f"Choose <b>{word[0]}</b> in Russian", reply_markup=markup)
     bot.register_next_step_handler(message, learn_1st_2, day_dict, temp, word, num, first_day_dict)
 
@@ -288,7 +295,7 @@ def learn_1st_2(message, day_dict, temp, word, num, first_day_dict):
         create_table(message, f'first_temp{get_id(message)}')
         if counting(message) % 2 == 1:
             try:
-                for i in range(0, len(first_day_dict)):
+                for i in range(len(first_day_dict)):
                     add = f"INSERT INTO first{get_id(message)} (english, russian)\
                      VALUES ('{first_day_dict[i][0]}', '{first_day_dict[i][1]}')"
                     cursor.execute(add)
@@ -299,7 +306,7 @@ def learn_1st_2(message, day_dict, temp, word, num, first_day_dict):
             learn_2nd(message, first_day_dict)
         else:
             try:
-                for i in range(0, len(first_day_dict)):
+                for i in range(len(first_day_dict)):
                     add = f"INSERT INTO first_temp{get_id(message)} (english, russian)\
                      VALUES ('{first_day_dict[i][0]}', '{first_day_dict[i][1]}')"
                     cursor.execute(add)
@@ -313,6 +320,10 @@ def learn_1st_2(message, day_dict, temp, word, num, first_day_dict):
 
 
 def learn_2nd(message, first_day_dict):
+    """
+    Learning words of the second day if user already done the first day at least twice (today and before it)
+    It shows a word in user's native language and they must choose this word in English from four options
+    """
     if counting(message) % 2 == 1 and counting(message) != 1:
         try:
             bot.send_message(message.chat.id, "Here is words for training:")
@@ -323,7 +334,7 @@ def learn_2nd(message, first_day_dict):
         except Error as e:
             bot.send_message(message.chat.id, f"The error '{e}' occurred")
             start(message)
-        for i in range(0, 10):
+        for i in range(len(first_day_dict)):
             bot.send_message(message.chat.id, f'{first_day_dict[i][0]} - {first_day_dict[i][1]}')
         second_day_dict = []
         temp = first_day_dict.copy()
@@ -342,7 +353,7 @@ def learn_2nd(message, first_day_dict):
         except Error as e:
             bot.send_message(message.chat.id, f"The error '{e}' occurred")
             start(message)
-        for i in range(0, 10):
+        for i in range(len(first_day_dict)):
             bot.send_message(message.chat.id, f'{first_day_dict[i][0]} - {first_day_dict[i][1]}')
         second_day_dict = []
         temp = first_day_dict.copy()
@@ -357,31 +368,12 @@ def learn_2nd(message, first_day_dict):
 
 
 def learn_2nd_1(message, second_day_dict, first_day_dict, temp):
-    num = random.randint(0, len(first_day_dict) - 1)
+    num = random.randint(len(first_day_dict) - 1)
     word = first_day_dict[num]
-    rand = random.randint(1, 4)
+    rand = random.randint(3)
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    if rand == 1:
-        item1 = types.KeyboardButton(f'{word[0]}')
-        item2 = types.KeyboardButton(f'{temp[random.randint(0, 9)][0]}')
-        item3 = types.KeyboardButton(f'{temp[random.randint(0, 9)][0]}')
-        item4 = types.KeyboardButton(f'{temp[random.randint(0, 9)][0]}')
-    elif rand == 2:
-        item1 = types.KeyboardButton(f'{temp[random.randint(0, 9)][0]}')
-        item2 = types.KeyboardButton(f'{word[0]}')
-        item3 = types.KeyboardButton(f'{temp[random.randint(0, 9)][0]}')
-        item4 = types.KeyboardButton(f'{temp[random.randint(0, 9)][0]}')
-    elif rand == 3:
-        item1 = types.KeyboardButton(f'{temp[random.randint(0, 9)][0]}')
-        item2 = types.KeyboardButton(f'{temp[random.randint(0, 9)][0]}')
-        item3 = types.KeyboardButton(f'{word[0]}')
-        item4 = types.KeyboardButton(f'{temp[random.randint(0, 9)][0]}')
-    else:
-        item1 = types.KeyboardButton(f'{temp[random.randint(0, 9)][0]}')
-        item2 = types.KeyboardButton(f'{temp[random.randint(0, 9)][0]}')
-        item3 = types.KeyboardButton(f'{temp[random.randint(0, 9)][0]}')
-        item4 = types.KeyboardButton(f'{word[0]}')
-    markup.add(item1, item2, item3, item4)
+    items = [temp[random.randint(9)][1] for i in range(3) in i != rand else word[0]]
+    markup.add(*items)
     msg = bot.send_message(message.chat.id, f"Choose <b>{word[1]}</b> in English", reply_markup=markup)
     bot.register_next_step_handler(msg, learn_2nd_2, second_day_dict, first_day_dict, temp, word, num)
 
@@ -399,7 +391,7 @@ def learn_2nd_2(message, second_day_dict, first_day_dict, temp, word, num):
         create_table(message, f'second_temp{get_id(message)}')
         if counting(message) % 2 == 0:
             try:
-                for i in range(0, len(second_day_dict)):
+                for i in range(len(second_day_dict)):
                     add = f"INSERT INTO second{get_id(message)} (english, russian)\
                                  VALUES ('{second_day_dict[i][0]}', '{second_day_dict[i][1]}')"
                     cursor.execute(add)
@@ -410,7 +402,7 @@ def learn_2nd_2(message, second_day_dict, first_day_dict, temp, word, num):
             learn_3rd(message)
         else:
             try:
-                for i in range(0, len(second_day_dict)):
+                for i in range(len(second_day_dict)):
                     add = f"INSERT INTO second_temp{get_id(message)} (english, russian)\
                                  VALUES ('{second_day_dict[i][0]}', '{second_day_dict[i][1]}')"
                     cursor.execute(add)
@@ -424,6 +416,11 @@ def learn_2nd_2(message, second_day_dict, first_day_dict, temp, word, num):
 
 
 def learn_3rd(message):
+    """
+    Learning words of the second day if user already done the first two days day at least twice
+    It shows a word in user's native language and letters from the word in English randomly and user must write
+    this word in English
+    """
     if counting(message) % 2 == 1:
         try:
             bot.send_message(message.chat.id, "Here is words for training:")
@@ -434,7 +431,7 @@ def learn_3rd(message):
         except Error as e:
             bot.send_message(message.chat.id, f"The error '{e}' occurred")
             start(message)
-        for i in range(0, 10):
+        for i in range(len(second_day_dict)):
             bot.send_message(message.chat.id, f'{second_day_dict[i][0]} - {second_day_dict[i][1]}')
         third_day_dict = []
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -452,7 +449,7 @@ def learn_3rd(message):
         except Error as e:
             bot.send_message(message.chat.id, f"The error '{e}' occurred")
             start(message)
-        for i in range(0, 10):
+        for i in range(len(second_day_dict)):
             bot.send_message(message.chat.id, f'{second_day_dict[i][0]} - {second_day_dict[i][1]}')
         third_day_dict = []
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -467,12 +464,12 @@ def learn_3rd(message):
 
 def learn_3rd_1(message, second_day_dict, third_day_dict):
     telebot.types.ReplyKeyboardRemove()
-    num = random.randint(0, len(second_day_dict) - 1)
+    num = random.randint(len(second_day_dict) - 1)
     word, temp_word = second_day_dict[num]
     showed_word = []
     rep_word = list(word)
-    for i in range(0, len(word)):
-        letter = random.randint(0, len(word) - 1 - i)
+    for i in range(len(word)):
+        letter = random.randint(len(word) - 1 - i)
         a = rep_word.pop(letter)
         showed_word.append(a)
     showed_word = ','.join(showed_word)
@@ -493,7 +490,7 @@ def learn_3rd_2(message, second_day_dict, third_day_dict, word, num):
         create_table(message, f'third_temp{get_id(message)}')
         if counting(message) % 2 == 0:
             try:
-                for i in range(0, len(third_day_dict)):
+                for i in range(len(third_day_dict)):
                     add = f"INSERT INTO third{get_id(message)} (english, russian)\
                                      VALUES ('{third_day_dict[i][0]}', '{third_day_dict[i][1]}')"
                     cursor.execute(add)
@@ -504,7 +501,7 @@ def learn_3rd_2(message, second_day_dict, third_day_dict, word, num):
             learn_4th(message)
         else:
             try:
-                for i in range(0, len(third_day_dict)):
+                for i in range(len(third_day_dict)):
                     add = f"INSERT INTO third_temp{get_id(message)} (english, russian)\
                                      VALUES ('{third_day_dict[i][0]}', '{third_day_dict[i][1]}')"
                     cursor.execute(add)
@@ -518,6 +515,10 @@ def learn_3rd_2(message, second_day_dict, third_day_dict, word, num):
 
 
 def learn_4th(message):
+    """
+    Learning words of the second day if user already done the first three days day at least twice
+    It shows a word in user's native language and user must write this word in English
+    """
     telebot.types.ReplyKeyboardRemove()
     if counting(message) % 2 == 0:
         try:
@@ -528,7 +529,7 @@ def learn_4th(message):
         except Error as e:
             bot.send_message(message.chat.id, f"The error '{e}' occurred")
             start(message)
-        for i in range(0, len(third_day_dict)):
+        for i in range(len(third_day_dict)):
             bot.send_message(message.chat.id, f'{third_day_dict[i][0]} - {third_day_dict[i][1]}')
         fourth_day_dict = []
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -545,7 +546,7 @@ def learn_4th(message):
         except Error as e:
             bot.send_message(message.chat.id, f"The error '{e}' occurred")
             start(message)
-        for i in range(0, len(third_day_dict)):
+        for i in range(len(third_day_dict)):
             bot.send_message(message.chat.id, f'{third_day_dict[i][0]} - {third_day_dict[i][1]}')
         fourth_day_dict = []
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -560,7 +561,7 @@ def learn_4th(message):
 
 
 def learn_4th_1(message, third_day_dict, fourth_day_dict):
-    num = random.randint(0, len(third_day_dict) - 1)
+    num = random.randint(len(third_day_dict) - 1)
     word = third_day_dict[num]
     bot.send_message(message.chat.id, f'Enter <b>{word[1]}</b> in English')
     bot.register_next_step_handler(message, learn_4th_2, third_day_dict, fourth_day_dict, word, num)
@@ -581,8 +582,11 @@ def learn_4th_2(message, third_day_dict, fourth_day_dict, word, num):
 
 
 def save_dict(message, fourth_day_dict):
+    """
+    Saving learned words in the other table of db
+    """
     create_table(message, f'learned{get_id(message)}')
-    for i in range(0, 10):
+    for i in range(len(fourth_day_dict)):
         word = fourth_day_dict[i]
         add = f"INSERT INTO learned{get_id(message)} (english, russian) VALUES ('{word[0]}', '{word[1]}')"
         try:
@@ -603,6 +607,9 @@ def start(message):
 
 
 def menu(message):
+    """
+    User chooses what to do next
+    """
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     item1 = types.KeyboardButton("Learn words of the day")
     item2 = types.KeyboardButton("Add words")
@@ -615,16 +622,11 @@ def menu(message):
 
 
 def choose(message):
-    if message.text == 'Learn words of the day':
-        _10aday(message)
-    elif message.text == 'Add words':
-        add_eng(message)
-    elif message.text == 'Delete words':
-        delete(message)
-    elif message.text == 'Translate words':
-        translate_it(message)
-    elif message.text == 'Show your dictionary':
-        show(message)
+    temp_dict = {'Learn words of the day': ten_a_day, 'Add words': add_eng, 'Delete words': delete,
+                 'Translate words': translate_it, 'Show your dictionary': show}
+    func = temp_dict.get(message.text)
+    if func:
+        func(message)
     else:
         bot.reply_to(message, 'Try again')
         menu(message)
