@@ -6,7 +6,7 @@ from telebot import types
 from googletrans import Translator
 import datetime
 import logging
-
+import irregular_verbs as ir
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.DEBUG, filename='logs.log')
 
@@ -28,7 +28,7 @@ def create_connection(path):
     """
     connection = None
     try:
-        connection = sqlite3.connect( path, check_same_thread=False)
+        connection = sqlite3.connect(path, check_same_thread=False)
     except Error as e:
         logging.exception(f"The error '{e}' occurred")
         start(message)
@@ -68,7 +68,7 @@ def counting(message):
     return int(count[-1][-1])
 
 
-
+@bot.message_handler(commands=['translate'])
 def translate_it(message):
     """
     User can write a word or a phrase to translate
@@ -92,6 +92,7 @@ def translate_it3(message, eng, rus):
     markup.add(item1, item2, item3)
     msg = bot.send_message(message.chat.id, 'Do you want to repeat?', reply_markup=markup)
     bot.register_next_step_handler(msg, translate_it4, eng, rus)
+
 
 def translate_it4(message, eng, rus):
     if message.text == 'Translate another word':
@@ -120,7 +121,7 @@ def save_translated(message, eng, rus):
     msg = bot.send_message(message.chat.id, f"The pair added successfully", reply_markup=markup)
     translate_it3(msg, eng, rus)
 
-
+@bot.message_handler(commands=['show'])
 def show(message):
     """
     Show user's dictionary
@@ -134,6 +135,7 @@ def show(message):
     start(message)
 
 
+@bot.message_handler(commands=['delete'])
 def delete(message):
     """
     Delete a pair from user's dictionary
@@ -150,15 +152,10 @@ def delete2(message):
     cursor = connection.cursor()
     key = message.text
     delete = f"DELETE FROM user{get_id(message)} WHERE english = '{key}' OR russian = '{key}'"
-    try:
-        cursor.execute(delete)
-        connection.commit()
-        bot.send_message(message.chat.id, "The pair deleted successfully", reply_markup=markup)
-        bot.register_next_step_handler(message, repeat_delete)
-    except Error as e:
-        logging.exception(f"The error '{e}' occurred")
-        bot.send_message(message.chat.id, f"The error occurred", reply_markup=markup)
-        bot.register_next_step_handler(message, repeat_delete)
+    cursor.execute(delete)
+    connection.commit()
+    bot.send_message(message.chat.id, "The pair deleted successfully", reply_markup=markup)
+    bot.register_next_step_handler(message, repeat_delete)
 
 
 def repeat_delete(message):
@@ -168,6 +165,7 @@ def repeat_delete(message):
         return start(message)
 
 
+@bot.message_handler(commands=['add'])
 def add_eng(message):
     """
     Manually adding pairs of words to user's dictionary
@@ -189,15 +187,10 @@ def adding(message, key, val):
     item2 = types.KeyboardButton("To main menu")
     markup.add(item1, item2)
     add = f"INSERT INTO user{get_id(message)} (english, russian) VALUES ('{key}', '{val}')"
-    try:
-        cursor.execute(add)
-        connection.commit()
-        bot.send_message(message.chat.id, f"The pair added successfully", reply_markup=markup)
-        bot.register_next_step_handler(message, repeat_add_word)
-    except Error as e:
-        logging.exception(f"The error '{e}' occurred")
-        bot.send_message(message.chat.id, f"The error '{e}' occurred")
-        bot.register_next_step_handler(message, repeat_add_word)
+    cursor.execute(add)
+    connection.commit()
+    bot.send_message(message.chat.id, f"The pair added successfully", reply_markup=markup)
+    bot.register_next_step_handler(message, repeat_add_word)
 
 
 def repeat_add_word(message):
@@ -206,7 +199,7 @@ def repeat_add_word(message):
     else:
         return start(message)
 
-
+@bot.message_handler(commands=['tenaday'])
 def ten_a_day(message):
     """
     Start learning words of the day
@@ -250,6 +243,7 @@ def learn_1st(message, day_dict):
     markup.add(item1)
     bot.send_message(message.chat.id, "Are you ready?", reply_markup=markup)
     bot.register_next_step_handler(message, learn_1st_1, day_dict, temp, first_day_dict)
+
 
 def learn_1st_1(message, day_dict, temp, first_day_dict):
     num = random.randint(0, len(day_dict) - 1)
@@ -378,15 +372,11 @@ def learn_3rd(message):
     this word in English
     """
     if counting(message) % 2 == 1:
-        try:
-            bot.send_message(message.chat.id, "Here is words for training:")
-            cursor.execute(f"SELECT english, russian FROM second{get_id(message)}")
-            second_day_dict = cursor.fetchall()
-            cursor.execute(f"DROP TABLE second{get_id(message)}")
-            connection.commit()
-        except Error as e:
-            bot.send_message(message.chat.id, f"The error '{e}' occurred")
-            start(message)
+        bot.send_message(message.chat.id, "Here is words for training:")
+        cursor.execute(f"SELECT english, russian FROM second{get_id(message)}")
+        second_day_dict = cursor.fetchall()
+        cursor.execute(f"DROP TABLE second{get_id(message)}")
+        connection.commit()
         for i in range(len(second_day_dict)):
             bot.send_message(message.chat.id, f'{second_day_dict[i][0]} - {second_day_dict[i][1]}')
         third_day_dict = []
@@ -395,7 +385,7 @@ def learn_3rd(message):
         markup.add(item1)
         bot.send_message(message.chat.id, "Are you ready?", reply_markup=markup)
         bot.register_next_step_handler(message, learn_3rd_1, second_day_dict, third_day_dict)
-    elif counting(message) % 2 != 1  and counting(message) != 2:
+    elif counting(message) % 2 != 1 and counting(message) != 2:
         bot.send_message(message.chat.id, "Here is words for training:")
         cursor.execute(f"SELECT english, russian FROM second_temp{get_id(message)}")
         second_day_dict = cursor.fetchall()
@@ -495,7 +485,6 @@ def learn_4th(message):
         menu(message)
 
 
-
 def learn_4th_1(message, third_day_dict, fourth_day_dict):
     num = random.randint(0, len(third_day_dict) - 1)
     word = third_day_dict[num]
@@ -525,16 +514,61 @@ def save_dict(message, fourth_day_dict):
     for i in range(len(fourth_day_dict)):
         word = fourth_day_dict[i]
         add = f"INSERT INTO learned{get_id(message)} (english, russian) VALUES ('{word[0]}', '{word[1]}')"
-        try:
-            cursor.execute(add)
-            connection.commit()
-            bot.register_next_step_handler(message, repeat_add_word)
-        except Error as e:
-            bot.send_message(message.chat.id, f"The error '{e}' occurred")
-            bot.register_next_step_handler(message, repeat_add_word)
+        cursor.execute(add)
+        connection.commit()
+        bot.register_next_step_handler(message, repeat_add_word)
     bot.send_message(message.chat.id, f"The words added successfully")
     bot.send_message(message.chat.id, f"Great job! See you tomorrow")
     menu(message)
+
+
+@bot.message_handler(commands=['irregular'])
+def study_irregular_verbs(message):
+    next_word = list(ir.dictionary[random.randint(0, len(ir.dictionary) - 1)])
+    p = random.randint(1, 2)
+    form = next_word[p]
+    if p == 1:
+        bot.send_message(message.chat.id, f'Enter the second form of <b>{next_word[0]}</b>: ')
+        bot.register_next_step_handler(message, study_irregular_verbs_it_2, p, form, next_word)
+    else:
+        bot.send_message(message.chat.id, f'Enter the third form of <b>{next_word[0]}</b>: ')
+        bot.register_next_step_handler(message, study_irregular_verbs_it_2, p, form, next_word)
+
+
+def study_irregular_verbs_it_2(message, p, form, next_word):
+    if p == 1:
+        if message.text == form:
+            bot.send_message(message.chat.id, 'Excelent!')
+            repeat_study_irregular_verbs(message)
+        else:
+            bot.send_message(message.chat.id, f'Correct is: <b>{next_word}</b>')
+            repeat_study_irregular_verbs(message)
+    else:
+        if message.text == form:
+            bot.send_message(message.chat.id, 'Excelent!')
+            repeat_study_irregular_verbs(message)
+        else:
+            bot.send_message(message.chat.id, f'Correct is: <b>{next_word}</b>')
+            repeat_study_irregular_verbs(message)
+
+
+def repeat_study_irregular_verbs(message):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    item1 = types.KeyboardButton("Continue")
+    item2 = types.KeyboardButton("To main menu")
+    markup.add(item1, item2)
+    bot.send_message(message.chat.id, f"What next?", reply_markup=markup)
+    bot.register_next_step_handler(message, repeat_study_irregular_verbs_it_2)
+
+
+def repeat_study_irregular_verbs_it_2(message):
+    if message.text == 'Continue':
+        study_irregular_verbs(message)
+    elif message.text == 'To main menu':
+        menu(message)
+    else:
+        bot.send_message(message.chat.id, 'There is something wrong')
+        return start(message)
 
 
 @bot.message_handler(commands=['start'])
@@ -552,14 +586,16 @@ def menu(message):
     item3 = types.KeyboardButton("Delete words")
     item4 = types.KeyboardButton("Translate words")
     item5 = types.KeyboardButton("Show your dictionary")
-    markup.add(item1, item2, item3, item4, item5)
+    item6 = types.KeyboardButton("Study irregular verbs")
+    markup.add(item1, item2, item3, item4, item5, item6)
     msg = bot.send_message(message.chat.id, f"What next?", reply_markup=markup)
     bot.register_next_step_handler(msg, choose)
 
 
 def choose(message):
     temp_dict = {'Learn words of the day': ten_a_day, 'Add words': add_eng, 'Delete words': delete,
-                 'Translate words': translate_it, 'Show your dictionary': show}
+                 'Translate words': translate_it, 'Show your dictionary': show,
+                 'Study irregular verbs': study_irregular_verbs}
     func = temp_dict.get(message.text)
     if func:
         func(message)
@@ -573,4 +609,5 @@ while True:
         bot.polling(none_stop=True)
     except Exception as e:
         print(e)
+        logging.error(f"Error: {e}. Connection reloaded")
         continue
